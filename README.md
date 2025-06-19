@@ -1,98 +1,155 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Sales Data Synchronization Pipeline
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## Objective
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Develop a data synchronization pipeline to keep a local PostgreSQL database in sync with weekly updated real estate sales data from a CSV file within a ZIP archive. The pipeline detects and reflects additions, modifications, and deletions, ensuring the database always mirrors the source data.
 
-## Description
+## Technology Stack
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+* **Backend/Logic:** NestJS (TypeScript)
+* **Database:** PostgreSQL
+* **CSV/ZIP Handling:** `csv-parse`, `adm-zip`
+* **ORM:** TypeORM
+* **Scheduling:** Cron (for Unix/Linux)
 
-## Project setup
+## Features & Requirements Met
 
-```bash
-$ npm install
-```
+* **Database Schema:** Normalized PostgreSQL schema (`sales_data` table) with `UUID` primary key, a composite unique identifier (`transaction_composite_id`), and auditing timestamps (`created_at`, `updated_at`).
+* **Data Sync Logic:** Implemented to handle:
+    * **Insertions:** Adds new records.
+    * **Updates:** Detects changes via SHA256 checksums and updates existing records.
+    * **Deletions:** Removes records no longer present in the source.
+* **Source Data Handling:** Reads and parses CSV data from ZIP files.
+* **Automated Scheduling:** Configurable cron job for weekly execution (Unix/Linux).
+* **Logging:** Outputs sync results and errors to a log file.
 
-## Compile and run the project
+## Expected Deliverables
 
-```bash
-# development
-$ npm run start
+* `schema.sql`: PostgreSQL database schema definition.
+* TypeScript Application Code: All files within `src/` for pipeline logic.
+* `cron_setup.sh`: Script for cron job configuration (Unix/Linux).
+* `README.md`: This documentation.
 
-# watch mode
-$ npm run start:dev
+## Setup & Run Instructions
 
-# production mode
-$ npm run start:prod
-```
+### 1. Initial Setup and Dependencies
 
-## Run tests
+1.  **Prerequisites:** Ensure you have **Node.js (LTS)**, **npm**, and **PostgreSQL** installed.
+2.  **NestJS CLI:** Install globally: `npm install -g @nestjs/cli`
+3.  **ts-node:** Install globally (for development runs): `npm install -g ts-node`
+4.  **Create Project:**
+    ```bash
+    nest new sales-data-sync
+    cd sales-data-sync
+    ```
+5.  **Install Dependencies:**
+    ```bash
+    npm install @nestjs/typeorm pg csv-parse adm-zip crypto fs-extra dotenv
+    npm install -D @types/csv-parse @types/adm-zip @types/node @types/fs-extra
+    ```
+6.  **Environment Variables:** Create `.env` in project root:
+    ```
+    DB_HOST=localhost
+    DB_PORT=5432
+    DB_USERNAME=sales_user
+    DB_PASSWORD=your_secure_password # <-- IMPORTANT: Use the actual password you set for sales_user
+    DB_DATABASE=sales_db
+    ```
+    *(For version control, create `.env.example` with placeholder values and add `.env` to your `.gitignore`.)*
+7.  **Place Code:** Ensure all TypeScript files (`src/data-sync/`, `src/manual-sync.ts`, updated `src/app.module.ts`, etc.) are in place as per the project structure discussed.
+8.  **Build Application:**
+    ```bash
+    npm run build
+    ```
 
-```bash
-# unit tests
-$ npm run test
+### 2. PostgreSQL Setup and Expected Structure
 
-# e2e tests
-$ npm run test:e2e
+1.  **Create DB & User:** (Connect as PostgreSQL superuser, e.g., `psql -U postgres`)
+    ```sql
+    CREATE DATABASE sales_db;
+    CREATE USER sales_user WITH PASSWORD 'your_secure_password';
+    GRANT ALL PRIVILEGES ON DATABASE sales_db TO sales_user;
+    GRANT CREATE ON SCHEMA public TO sales_user; # Important for schema creation
+    \q
+    ```
+2.  **Apply Schema:** The `schema.sql` file is provided in the project root.
+    ```bash
+    # Linux/macOS:
+    psql -U sales_user -d sales_db -f schema.sql
+    # Windows Git Bash (adjust path if psql is not in PATH):
+    "/c/Program Files/PostgreSQL/16/bin/psql.exe" -U sales_user -d sales_db -f schema.sql
+    ```
+3.  **Expected Structure:** The `sales_data` table will be created as defined in `schema.sql`, ready to store your real estate sales records with a focus on unique transaction identification, data integrity, and change tracking.
 
-# test coverage
-$ npm run test:cov
-```
 
-## Deployment
+### 3. Running the Sync Manually (Demonstration)
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+This section demonstrates how to run the sync pipeline against dummy data to verify insertions, updates, and deletions. Follow these steps in order:
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+1. **Generate Dummy Data**
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+   ```bash
+   node create-dummy-data.js
+   ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+   This creates ZIP files in `dummy_data/`:
 
-## Resources
+   * `0122_CUR_Source_V1.zip`
+   * `0122_CUR_Source_V2.zip`
 
-Check out a few resources that may come in handy when working with NestJS:
+2. **Prepare the Database** (Optional but recommended for a clean test)
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+   ```bash
+   # Truncate the table and reset primary key sequence
+   psql -U sales_user -d sales_db \
+     -c "TRUNCATE TABLE sales_data RESTART IDENTITY;"
+   ```
 
-## Support
+3. **Test Sequence**
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+   | Step | Action             | Command                                                          | Expected Result                                                            |
+   | ---- | ------------------ | ---------------------------------------------------------------- | -------------------------------------------------------------------------- |
+   | 1    | **Initial Load**   | `ts-node src/manual-sync.ts ./dummy_data/0122_CUR_Target.zip`    | Inserts \~50 records (no updates or deletions)                             |
+   | 2    | **No-Change Sync** | `ts-node src/manual-sync.ts ./dummy_data/0122_CUR_Source_V1.zip` | No changes (0 inserts, 0 updates, 0 deletions)                             |
+   | 3    | **Delta Sync**     | `ts-node src/manual-sync.ts ./dummy_data/0122_CUR_Source_V2.zip` | Applies adds, updates, deletions (\~5 inserts, \~2 updates, \~2 deletions) |
 
-## Stay in touch
+4. **Verify Results** After each run, query the database:
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+   ```sql
+   -- Check total records
+   SELECT count(*) FROM sales_data;
 
-## License
+   -- View most recent changes
+   SELECT *
+   FROM sales_data
+   ORDER BY updated_at DESC
+   LIMIT 10;
+   ```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+5. **Sync Summary Output** Each run prints a JSON summary, for example:
+
+   ```json
+   {
+     "inserted": 50,
+     "updated": 0,
+     "deleted": 0,
+     "errors": 0
+   }
+   ```
+
+Now you can confirm that the pipeline correctly handles insertions, detects no changes when the source is identical, and processes deltas (additions, modifications, deletions) as expected.
+
+### 4. Scheduling via Cron (for Unix/Linux System)
+
+This step outlines how to set up the weekly automated execution of your sync pipeline on a Unix/Linux server.
+
+1.  **Save `cron_setup.sh`:** Save the script (your version from our conversation) in your project root.
+2.  **Configure `cron_setup.sh`:** **IMPORTANT:** Open `cron_setup.sh` and **edit the variables** `APP_DIR`, `NODE_PATH`, and `SOURCE_ZIP_FILE` to reflect the **absolute Linux paths** appropriate for your deployment environment (e.g., `APP_DIR="/home/youruser/sales-data-sync"`, `NODE_PATH="/usr/bin/node"`, `SOURCE_ZIP_FILE="/path/to/weekly/0122_CUR_Source.ZIP"`).
+3.  **Make Executable & Run:**
+    ```bash
+    chmod +x cron_setup.sh
+    ./cron_setup.sh
+    ```
+    This command will add a weekly cron job (typically scheduled for Sunday at 02:00 AM) that executes your compiled `manual-sync.js` script.
+4.  **Monitor Logs:** The output of the cron job will be directed to `${APP_DIR}/logs/sales_sync.log`. You can monitor it using `tail -f ${APP_DIR}/logs/sales_sync.log`.
+5.  **Log Rotation (Recommended):** Consider setting up `logrotate` for `sales_sync.log` to manage log file sizes over time (instructions are commented within `cron_setup.sh`).
